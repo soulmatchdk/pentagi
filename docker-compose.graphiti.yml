@@ -1,22 +1,15 @@
 services:
   neo4j:
     image: neo4j:5.26.2
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474/ | grep -q neo4j_version"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
     restart: unless-stopped
 
-    # VIGTIGT: ingen container_name (så undgår du conflicts ved redeploy)
+    # Ingen container_name (undgår conflicts ved redeploy)
     # container_name: neo4j
 
     environment:
-      # Standard auth (brug dine env vars hvis de findes)
       NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-devpassword}"
 
-      # (valgfrit) lidt mere konservativ memory så den starter hurtigere på små VPS'er
+      # konservativ memory (valgfrit)
       NEO4J_server_memory_heap_initial__size: "${NEO4J_HEAP_INIT:-512m}"
       NEO4J_server_memory_heap_max__size: "${NEO4J_HEAP_MAX:-1g}"
       NEO4J_server_memory_pagecache_size: "${NEO4J_PAGECACHE:-512m}"
@@ -27,25 +20,24 @@ services:
     networks:
       - pentagi-network
 
-    # Healthcheck der ikke kræver wget/curl
-    # Tester bare at port 7474 kan accepteres lokalt.
+    # Expose internt (ingen behov for host-binding)
+    expose:
+      - "7474"
+      - "7687"
+
+    # Healthcheck uden wget/curl: test at 7474 accepterer TCP
     healthcheck:
       test: ["CMD-SHELL", "bash -lc 'echo > /dev/tcp/127.0.0.1/7474'"]
       interval: 5s
       timeout: 5s
       retries: 60
-      start_period: 45s
-
-    # Expose internt (ingen behov for at binde til host med ports)
-    expose:
-      - "7474"
-      - "7687"
+      start_period: 60s
 
   graphiti:
     image: vxcontrol/graphiti:latest
     restart: unless-stopped
 
-    # ingen container_name (samme grund som ovenfor)
+    # Ingen container_name
     # container_name: graphiti
 
     depends_on:
@@ -58,7 +50,6 @@ services:
       NEO4J_PASSWORD: "${NEO4J_PASSWORD:-devpassword}"
       NEO4J_DATABASE: "${NEO4J_DATABASE:-neo4j}"
 
-      # Du sagde: “minimax-m2.5-free til alt!”
       MODEL_NAME: "${GRAPHITI_MODEL_NAME:-minimax-m2.5-free}"
 
       OPENAI_BASE_URL: "${OPEN_AI_SERVER_URL:-https://api.openai.com/v1}"
@@ -66,7 +57,7 @@ services:
 
       PORT: "8000"
 
-    # Host-port: brug 18000 (så du undgår 8000 konflikt)
+    # Host-port: brug 18000 så du undgår 8000 konflikt
     ports:
       - "127.0.0.1:${GRAPHITI_PORT:-18000}:8000"
 
@@ -74,11 +65,11 @@ services:
       - pentagi-network
 
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')\""]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthcheck', timeout=2).read()\""]
       interval: 10s
       timeout: 5s
-      retries: 20
-      start_period: 20s
+      retries: 30
+      start_period: 30s
 
 volumes:
   neo4j_data:
