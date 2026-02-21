@@ -12,7 +12,6 @@ services:
   neo4j:
     image: neo4j:5.26.2
     restart: unless-stopped
-    container_name: neo4j
     hostname: neo4j
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
@@ -38,7 +37,6 @@ services:
   graphiti:
     image: vxcontrol/graphiti:latest
     restart: unless-stopped
-    container_name: graphiti
     hostname: graphiti
     healthcheck:
       test:

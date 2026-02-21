@@ -23,7 +23,6 @@ services:
   pentagi:
     image: ${PENTAGI_IMAGE:-vxcontrol/pentagi:latest}
     restart: unless-stopped
-    container_name: pentagi
     hostname: pentagi
     expose:
       - 8443/tcp
@@ -156,7 +155,6 @@ services:
   pgvector:
     image: vxcontrol/pgvector:latest
     restart: unless-stopped
-    container_name: pgvector
     hostname: pgvector
     expose:
       - 5432/tcp
@@ -180,7 +178,6 @@ services:
     restart: unless-stopped
     depends_on:
       - pgvector
-    container_name: pgexporter
     hostname: pgexporter
     expose:
       - 9187/tcp
@@ -198,7 +195,6 @@ services:
   scraper:
     image: vxcontrol/scraper:latest
     restart: unless-stopped
-    container_name: scraper
     hostname: scraper
     expose:
       - 443/tcp
