@@ -2,34 +2,77 @@ services:
   neo4j:
     image: neo4j:5.26.2
     restart: unless-stopped
+
+    # VIGTIGT: ingen container_name (så undgår du conflicts ved redeploy)
+    # container_name: neo4j
+
     environment:
-      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-devpassword}
-      - NEO4J_server_memory_pagecache_size=512M
-      - NEO4J_server_memory_heap_initial__size=512M
-      - NEO4J_server_memory_heap_max__size=1024M
+      # Standard auth (brug dine env vars hvis de findes)
+      NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-devpassword}"
+
+      # (valgfrit) lidt mere konservativ memory så den starter hurtigere på små VPS'er
+      NEO4J_server_memory_heap_initial__size: "${NEO4J_HEAP_INIT:-512m}"
+      NEO4J_server_memory_heap_max__size: "${NEO4J_HEAP_MAX:-1g}"
+      NEO4J_server_memory_pagecache_size: "${NEO4J_PAGECACHE:-512m}"
+
     volumes:
       - neo4j_data:/data
+
     networks:
       - pentagi-network
-    shm_size: 1g
+
+    # Healthcheck der ikke kræver wget/curl
+    # Tester bare at port 7474 kan accepteres lokalt.
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'echo > /dev/tcp/127.0.0.1/7474'"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 45s
+
+    # Expose internt (ingen behov for at binde til host med ports)
+    expose:
+      - "7474"
+      - "7687"
 
   graphiti:
     image: vxcontrol/graphiti:latest
     restart: unless-stopped
-    # VIGTIGT: IKKE "condition: service_healthy"
+
+    # ingen container_name (samme grund som ovenfor)
+    # container_name: graphiti
+
     depends_on:
-      - neo4j
+      neo4j:
+        condition: service_healthy
+
     environment:
-      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
-      - NEO4J_USER=${NEO4J_USER:-neo4j}
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-devpassword}
-      - MODEL_NAME=${GRAPHITI_MODEL_NAME:-minimax-m2.5-free}
-      - OPENAI_BASE_URL=${OPEN_AI_SERVER_URL:-https://opencode.ai/zen/v1}
-      - OPENAI_API_KEY=${OPEN_AI_KEY:-}
-      - PORT=8000
+      NEO4J_URI: "${NEO4J_URI:-bolt://neo4j:7687}"
+      NEO4J_USER: "${NEO4J_USER:-neo4j}"
+      NEO4J_PASSWORD: "${NEO4J_PASSWORD:-devpassword}"
+      NEO4J_DATABASE: "${NEO4J_DATABASE:-neo4j}"
+
+      # Du sagde: “minimax-m2.5-free til alt!”
+      MODEL_NAME: "${GRAPHITI_MODEL_NAME:-minimax-m2.5-free}"
+
+      OPENAI_BASE_URL: "${OPEN_AI_SERVER_URL:-https://api.openai.com/v1}"
+      OPENAI_API_KEY: "${OPEN_AI_KEY:-}"
+
+      PORT: "8000"
+
+    # Host-port: brug 18000 (så du undgår 8000 konflikt)
+    ports:
+      - "127.0.0.1:${GRAPHITI_PORT:-18000}:8000"
+
     networks:
       - pentagi-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
 
 volumes:
   neo4j_data:
@@ -37,5 +80,4 @@ volumes:
 
 networks:
   pentagi-network:
-    driver: bridge
-    name: pentagi-network
+    external: false
