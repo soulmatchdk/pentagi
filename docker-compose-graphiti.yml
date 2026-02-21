@@ -19,9 +19,8 @@ services:
       timeout: 10s
       retries: 10
       start_period: 3s
-    ports:
-      - "127.0.0.1:7474:7474" # HTTP
-      - "127.0.0.1:7687:7687" # Bolt
+    # ports 7474 (HTTP) and 7687 (Bolt) are intentionally not exposed to the
+    # host to avoid conflicts; configure external access via Coolify if needed
     logging:
       options:
         max-size: 50m
@@ -52,8 +51,8 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:8000:8000"
+    # port 8000 is intentionally not exposed to the host to avoid conflicts;
+    # configure external access via Coolify if needed
     logging:
       options:
         max-size: 50m
