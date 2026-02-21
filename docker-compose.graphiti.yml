@@ -65,11 +65,11 @@ services:
       - pentagi-network
 
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthcheck', timeout=2).read()\""]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 10s       # Vent 10 sekunder mellem hvert tjek
+      timeout: 10s        # Lad wget vente i op til 10 sekunder på svar
+      retries: 10         # Prøv op til 10 gange (giver over 100 sekunder i alt)
+      start_period: 30s   # Giv den 30 sekunders fred fra start inden vi overhovedet begynder at tjekke
 
 volumes:
   neo4j_data:
