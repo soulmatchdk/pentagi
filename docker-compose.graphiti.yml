@@ -1,80 +1,74 @@
-services:
-  neo4j:
-    image: neo4j:5.26.2
-    restart: unless-stopped
-
-    # Ingen container_name (undgår conflicts ved redeploy)
-    # container_name: neo4j
-
-    environment:
-      NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-devpassword}"
-
-      # konservativ memory (valgfrit)
-      NEO4J_server_memory_heap_initial__size: "${NEO4J_HEAP_INIT:-512m}"
-      NEO4J_server_memory_heap_max__size: "${NEO4J_HEAP_MAX:-1g}"
-      NEO4J_server_memory_pagecache_size: "${NEO4J_PAGECACHE:-512m}"
-
-    volumes:
-      - neo4j_data:/data
-
-    networks:
-      - pentagi-network
-
-    # Expose internt (ingen behov for host-binding)
-    expose:
-      - "7474"
-      - "7687"
-
-    # Healthcheck uden wget/curl: test at 7474 accepterer TCP
-    healthcheck:
-      test: ["CMD-SHELL", "bash -lc 'echo > /dev/tcp/127.0.0.1/7474'"]
-      interval: 5s
-      timeout: 5s
-      retries: 60
-      start_period: 60s
-
-  graphiti:
-    image: vxcontrol/graphiti:latest
-    restart: unless-stopped
-
-    # Ingen container_name
-    # container_name: graphiti
-
-    depends_on:
-      neo4j:
-        condition: service_healthy
-
-    environment:
-      NEO4J_URI: "${NEO4J_URI:-bolt://neo4j:7687}"
-      NEO4J_USER: "${NEO4J_USER:-neo4j}"
-      NEO4J_PASSWORD: "${NEO4J_PASSWORD:-devpassword}"
-      NEO4J_DATABASE: "${NEO4J_DATABASE:-neo4j}"
-
-      MODEL_NAME: "${GRAPHITI_MODEL_NAME:-minimax-m2.5-free}"
-
-      OPENAI_BASE_URL: "${OPEN_AI_SERVER_URL:-https://api.openai.com/v1}"
-      OPENAI_API_KEY: "${OPEN_AI_KEY:-}"
-
-      PORT: "8000"
-
-    # Host-port: brug 18000 så du undgår 8000 konflikt
-    ports:
-      - "127.0.0.1:${GRAPHITI_PORT:-18000}:8000"
-
-    networks:
-      - pentagi-network
-
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
-      interval: 10s       # Vent 10 sekunder mellem hvert tjek
-      timeout: 10s        # Lad wget vente i op til 10 sekunder på svar
-      retries: 10         # Prøv op til 10 gange (giver over 100 sekunder i alt)
-      start_period: 30s   # Giv den 30 sekunders fred fra start inden vi overhovedet begynder at tjekke
-
 volumes:
   neo4j_data:
     driver: local
 
 networks:
   pentagi-network:
-    external: false
+    driver: bridge
+    external: true
+    name: pentagi-network
+
+services:
+  neo4j:
+    image: neo4j:5.26.2
+    restart: unless-stopped
+    hostname: neo4j
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 10s       # Øget til 10 sekunder
+      timeout: 10s
+      retries: 10
+      start_period: 30s   # Øget fra 3s til 30s, så databasen får ro til at starte op først
+    # Udkommenteret for at undgå "port already allocated" fejl. 
+    # Tjenester på samme docker netværk kan stadig snakke sammen over port 7687 og 7474
+    #ports:
+    #  - "127.0.0.1:7474:7474" # HTTP
+    #  - "127.0.0.1:7687:7687" # Bolt
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - neo4j_data:/data
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-devpassword}
+    networks:
+      - pentagi-network
+    shm_size: 4g
+
+  graphiti:
+    image: vxcontrol/graphiti:latest
+    restart: unless-stopped
+    hostname: graphiti
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    # Hvis graphiti også kun skal tilgås internt via pentagi, kan porten udkommenteres:
+    #ports:
+    #  - "127.0.0.1:8000:8000"
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    environment:
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-devpassword}
+      - MODEL_NAME=${GRAPHITI_MODEL_NAME:-gpt-5-mini}
+      - OPENAI_BASE_URL=${OPEN_AI_SERVER_URL:-https://api.openai.com/v1}
+      - OPENAI_API_KEY=${OPEN_AI_KEY:-}
+      - PORT=8000
+    networks:
+      - pentagi-network
