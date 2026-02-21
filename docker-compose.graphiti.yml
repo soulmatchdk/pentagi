@@ -3,9 +3,7 @@ services:
     image: neo4j:5.26.2
     restart: unless-stopped
     environment:
-      # Neo4j 5 kræver NEO4J_AUTH som "user/password"
       - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-devpassword}
-      # Undgå OOM / disk surprises (valgfrit men fornuftigt)
       - NEO4J_server_memory_pagecache_size=512M
       - NEO4J_server_memory_heap_initial__size=512M
       - NEO4J_server_memory_heap_max__size=1024M
@@ -18,6 +16,7 @@ services:
   graphiti:
     image: vxcontrol/graphiti:latest
     restart: unless-stopped
+    # VIGTIGT: IKKE "condition: service_healthy"
     depends_on:
       - neo4j
     environment:
