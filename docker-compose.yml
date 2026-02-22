@@ -1,3 +1,89 @@
+volumes:
+  pentagi-data:
+    driver: local
+  pentagi-postgres-data:
+    driver: local
+  scraper-ssl:
+    driver: local
+  neo4j_data:
+    driver: local
+
+networks:
+  pentagi-network:
+    driver: bridge
+    name: pentagi-network
+
+services:
+  pentagi:
+    image: vxcontrol/pentagi:latest
+    restart: unless-stopped
+    expose:
+      - "8000"
+    depends_on:
+      pgvector:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+    environment:
+      - SERVER_USE_SSL=false
+      - SERVER_PORT=8000
+      - SERVER_HOST=0.0.0.0
+      - DEBUG=false
+      - DOCKER_GID=998
+      
+      - DATABASE_URL=postgres://postgres:postgres@pgvector:5432/pentagidb?sslmode=disable
+      
+      - GRAPHITI_ENABLED=true
+      - GRAPHITI_TIMEOUT=30
+      - GRAPHITI_URL=http://graphiti:8000
+      - GRAPHITI_MODEL_NAME=minimax-m2.5-free 
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - pentagi-data:/opt/pentagi/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - pentagi-network
+
+  pgvector:
+    image: vxcontrol/pgvector:latest
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pentagidb
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - pentagi-postgres-data:/var/lib/postgresql/data
+    networks:
+      - pentagi-network
+
+  scraper:
+    image: vxcontrol/scraper:latest
+    restart: unless-stopped
+    expose:
+      - "443"
+    environment:
+      - MAX_CONCURRENT_SESSIONS=10
+      - USERNAME=someuser
+      - PASSWORD=somepass
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - scraper-ssl:/usr/src/app/ssl
+    networks:
+      - pentagi-network
+    shm_size: 2g
+
   neo4j:
     image: neo4j:5.26.2
     restart: unless-stopped
