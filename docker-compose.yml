@@ -29,7 +29,7 @@ services:
       - SERVER_PORT=8000
       - SERVER_HOST=0.0.0.0
       - DEBUG=false
-      - DOCKER_GID=999
+      - DOCKER_GID=988
       
       # LØSNING: Vi lader Coolify injecte dine PENTAGI_POSTGRES variabler
       - DATABASE_URL=postgres://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
