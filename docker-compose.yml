@@ -95,11 +95,12 @@ services:
     image: neo4j:5.26.2
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      # Optimeret health check for Neo4j
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
       interval: 10s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      retries: 20       # Øget fra 10 til 20 for at give den flere forsøg
+      start_period: 60s # Øget fra 30s til 60s
     logging:
       options:
         max-size: 50m
@@ -107,10 +108,10 @@ services:
     volumes:
       - neo4j_data:/data
     environment:
-      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-devpassword}
+      - NEO4J_AUTH=neo4j/devpassword
     networks:
       - pentagi-network
-    shm_size: 4g
+    shm_size: 1g        # Sænket fra 4g for at undgå potentielle Out-Of-Memory fejl
 
   graphiti:
     image: vxcontrol/graphiti:latest
