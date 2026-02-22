@@ -1,106 +1,12 @@
-volumes:
-  pentagi-data:
-    driver: local
-  pentagi-postgres-data:
-    driver: local
-  scraper-ssl:
-    driver: local
-  neo4j_data:
-    driver: local
-
-networks:
-  pentagi-network:
-    driver: bridge
-    name: pentagi-network
-
-services:
-  pentagi:
-    image: vxcontrol/pentagi:latest
-    restart: unless-stopped
-    # Coolify vil binde dit domæne til denne port (8000), 
-    # fordi SERVER_PORT og SERVER_USE_SSL dikterer det internt.
-    expose:
-      - "8000"
-    depends_on:
-      pgvector:
-        condition: service_started
-      neo4j:
-        condition: service_healthy
-    environment:
-      # --- Løsningen på "504 Gateway Time-out" ---
-      - SERVER_USE_SSL=false
-      - SERVER_PORT=8000
-      - SERVER_HOST=0.0.0.0
-      - DEBUG=false
-      - DOCKER_GID=998
-      
-      # Database konfiguration
-      - DATABASE_URL=postgres://postgres:postgres@pgvector:5432/pentagidb?sslmode=disable
-      
-      # Graphiti konfiguration (Slået til)
-      - GRAPHITI_ENABLED=true
-      - GRAPHITI_TIMEOUT=30
-      - GRAPHITI_URL=http://graphiti:8000
-      # Din Minimax model
-      - GRAPHITI_MODEL_NAME=minimax-m2.5-free 
-    logging:
-      options:
-        max-size: 50m
-        max-file: "7"
-    volumes:
-      - pentagi-data:/opt/pentagi/data
-      # Dette er kritisk for Pentagi
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - pentagi-network
-
-  pgvector:
-    image: vxcontrol/pgvector:latest
-    restart: unless-stopped
-    expose:
-      - "5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: pentagidb
-    logging:
-      options:
-        max-size: 50m
-        max-file: "7"
-    volumes:
-      - pentagi-postgres-data:/var/lib/postgresql/data
-    networks:
-      - pentagi-network
-
-  scraper:
-    image: vxcontrol/scraper:latest
-    restart: unless-stopped
-    expose:
-      - "443"
-    environment:
-      - MAX_CONCURRENT_SESSIONS=10
-      - USERNAME=someuser
-      - PASSWORD=somepass
-    logging:
-      options:
-        max-size: 50m
-        max-file: "7"
-    volumes:
-      - scraper-ssl:/usr/src/app/ssl
-    networks:
-      - pentagi-network
-    shm_size: 2g
-
   neo4j:
     image: neo4j:5.26.2
     restart: unless-stopped
     healthcheck:
-      # Optimeret health check for Neo4j
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
       interval: 10s
       timeout: 10s
-      retries: 20       # Øget fra 10 til 20 for at give den flere forsøg
-      start_period: 60s # Øget fra 30s til 60s
+      retries: 20
+      start_period: 60s
     logging:
       options:
         max-size: 50m
@@ -108,10 +14,11 @@ services:
     volumes:
       - neo4j_data:/data
     environment:
-      - NEO4J_AUTH=neo4j/devpassword
+      # Vi bruger nu GRAPHDB_ for at undgå at crashe Neo4j
+      - NEO4J_AUTH=${GRAPHDB_USER:-neo4j}/${GRAPHDB_PASSWORD:-devpassword}
     networks:
       - pentagi-network
-    shm_size: 1g        # Sænket fra 4g for at undgå potentielle Out-Of-Memory fejl
+    shm_size: 1g
 
   graphiti:
     image: vxcontrol/graphiti:latest
@@ -129,12 +36,12 @@ services:
         max-size: 50m
         max-file: "7"
     environment:
-      - NEO4J_URI=bolt://neo4j:7687
-      - NEO4J_USER=${NEO4J_USER:-neo4j}
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-devpassword}
+      # Graphiti får de navne den vil have, men dataen kommer fra GRAPHDB_ variablerne
+      - NEO4J_URI=${GRAPHDB_URI:-bolt://neo4j:7687}
+      - NEO4J_USER=${GRAPHDB_USER:-neo4j}
+      - NEO4J_DATABASE=${GRAPHDB_DATABASE:-neo4j}
+      - NEO4J_PASSWORD=${GRAPHDB_PASSWORD:-devpassword}
       
-      # Sætter modellen og hosten for graphiti ud fra din Environment variabel fil
       - MODEL_NAME=${GRAPHITI_MODEL_NAME:-minimax-m2.5-free}
       - OPENAI_BASE_URL=${OPEN_AI_SERVER_URL:-https://opencode.ai/zen/v1}
       - OPENAI_API_KEY=${OPEN_AI_KEY:-}
