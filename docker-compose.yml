@@ -31,7 +31,8 @@ services:
       - DEBUG=false
       - DOCKER_GID=998
       
-      - DATABASE_URL=postgres://postgres:postgres@pgvector:5432/pentagidb?sslmode=disable
+      # LØSNING: Vi lader Coolify injecte dine PENTAGI_POSTGRES variabler
+      - DATABASE_URL=postgres://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
       
       - GRAPHITI_ENABLED=true
       - GRAPHITI_TIMEOUT=30
@@ -53,9 +54,10 @@ services:
     expose:
       - "5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: pentagidb
+      # LØSNING: Databasen starter nu op med det password og brugernavn defineret i Coolify
+      POSTGRES_USER: ${PENTAGI_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${PENTAGI_POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${PENTAGI_POSTGRES_DB:-pentagidb}
     logging:
       options:
         max-size: 50m
@@ -103,7 +105,6 @@ services:
       - 'neo4j_data:/data'
     environment:
       - 'NEO4J_AUTH=${GRAPHDB_USER:-neo4j}/${GRAPHDB_PASSWORD:-devpassword}'
-      # LØSNINGEN: Vi slår strict validation fra, så Coolify kan injicere ekstra NEO4J_ variabler uden at crashe databasen
       - 'NEO4J_server_config_strict__validation_enabled=false'
     networks:
       - pentagi-network
@@ -125,7 +126,6 @@ services:
         max-size: 50m
         max-file: "7"
     environment:
-      # Graphiti får de navne den vil have, men dataen kommer fra GRAPHDB_ variablerne
       - NEO4J_URI=${GRAPHDB_URI:-bolt://neo4j:7687}
       - NEO4J_USER=${GRAPHDB_USER:-neo4j}
       - NEO4J_DATABASE=${GRAPHDB_DATABASE:-neo4j}
